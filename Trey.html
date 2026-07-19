@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#15191f">
+<title>Trey Logger · Harvard Bridge</title>
+<style>
+  :root{
+    --asphalt:#15191f; --surface:#1d232b; --surface2:#262e38; --surface3:#2f3947;
+    --chalk:#eef1f3; --muted:#8b97a5; --faint:#5c6675; --line:#333c47;
+    --amber:#ffa62b; --amber-d:#c97e17; --cyan:#4ecdc4; --coral:#ff6f61; --dawn:#3a2f4a;
+    --ok:#5fd08a;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--asphalt); color:var(--chalk); font-family:var(--sans);
+    line-height:1.4; overflow-x:hidden; padding-bottom:24px;
+    background-image:linear-gradient(180deg, var(--dawn) 0%, rgba(58,47,74,0) 220px);
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px;}
+
+  /* header */
+  header{display:flex;align-items:baseline;justify-content:space-between;padding:18px 0 6px;}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.5px;font-size:15px;}
+  .brand b{color:var(--amber);}
+  .brand span{color:var(--muted);font-weight:500;}
+  .clock{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:right;}
+  .clock b{color:var(--chalk);font-size:15px;display:block;}
+
+  /* storage note */
+  .note{font-size:12px;color:var(--faint);background:var(--surface);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;margin:8px 0;display:none;}
+  .note.show{display:block;}
+
+  /* hero readout */
+  .hero{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:18px 18px 14px;margin:10px 0;text-align:center;position:relative;overflow:hidden;}
+  .hero .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;}
+  .bignum{font-family:var(--mono);font-weight:700;font-size:76px;line-height:.98;letter-spacing:-2px;
+    font-variant-numeric:tabular-nums;margin:2px 0 0;}
+  .bignum .u{font-size:26px;color:var(--amber);letter-spacing:0;margin-left:6px;}
+  .subline{font-family:var(--mono);font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px;}
+  .subline b{color:var(--chalk);}
+
+  /* chalk progress strip — the signature element */
+  .strip-label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;
+    color:var(--muted);margin:14px 0 5px;letter-spacing:.5px;}
+  .strip{position:relative;height:26px;border-radius:6px;background:var(--surface2);
+    border:1px solid var(--line);overflow:hidden;}
+  .strip-fill{position:absolute;left:0;top:0;bottom:0;width:0%;
+    background:repeating-linear-gradient(90deg,var(--chalk) 0 2px,rgba(238,241,243,.82) 2px 7px);
+    transition:width .35s cubic-bezier(.22,.61,.36,1);mix-blend-mode:screen;opacity:.9;}
+  .strip-ticks{position:absolute;inset:0;pointer-events:none;}
+  .strip-ticks i{position:absolute;top:0;bottom:0;width:1px;background:var(--line);}
+  .strip-ticks i.major{background:var(--faint);}
+  .pct{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-family:var(--mono);
+    font-size:12px;color:var(--asphalt);font-weight:700;mix-blend-mode:normal;z-index:2;
+    text-shadow:0 0 3px rgba(238,241,243,.7);}
+
+  /* running placement timer */
+  .running{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center;margin:12px 0 4px;
+    height:18px;font-variant-numeric:tabular-nums;}
+  .running b{color:var(--amber);}
+
+  /* main action */
+  .log-btn{width:100%;border:none;border-radius:16px;padding:26px 16px;margin:8px 0;
+    background:var(--amber);color:#231603;font-family:var(--mono);font-weight:700;font-size:24px;
+    letter-spacing:.5px;cursor:pointer;box-shadow:0 6px 0 var(--amber-d);transition:transform .05s, box-shadow .05s;}
+  .log-btn:active{transform:translateY(4px);box-shadow:0 2px 0 var(--amber-d);}
+  .log-btn small{display:block;font-size:13px;font-weight:600;opacity:.7;margin-top:3px;letter-spacing:1px;}
+  .log-btn.start{background:var(--cyan);box-shadow:0 6px 0 #2e9a92;color:#04211f;}
+  .log-btn.start:active{box-shadow:0 2px 0 #2e9a92;}
+  .log-btn.done{background:var(--surface2);color:var(--muted);box-shadow:0 6px 0 #1a2029;cursor:default;}
+
+  /* secondary buttons */
+  .row{display:flex;gap:10px;margin:8px 0;}
+  .btn2{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--chalk);
+    border-radius:12px;padding:13px 8px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:7px;}
+  .btn2:active{background:var(--surface2);}
+  .btn2.warn{color:var(--coral);}
+  .btn2 svg{width:16px;height:16px;}
+
+  /* lifter selector */
+  .seg-wrap{margin:10px 0;}
+  .seg-title{font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--muted);
+    text-transform:uppercase;margin-bottom:6px;}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;}
+  .seg button{flex:1;min-width:56px;border:1px solid var(--line);background:var(--surface);
+    color:var(--muted);border-radius:10px;padding:10px 4px;font-family:var(--sans);font-weight:600;
+    font-size:14px;cursor:pointer;}
+  .seg button.active{background:var(--surface3);color:var(--chalk);border-color:var(--amber);}
+
+  /* stat chips */
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 0;}
+  .chip{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 10px;}
+  .chip .k{font-family:var(--mono);font-size:10px;letter-spacing:.8px;color:var(--muted);text-transform:uppercase;}
+  .chip .v{font-family:var(--mono);font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px;}
+  .chip .v small{font-size:12px;color:var(--muted);font-weight:600;}
+
+  /* section titles */
+  .sec-h{display:flex;align-items:center;gap:10px;margin:24px 0 10px;}
+  .sec-h h2{font-family:var(--mono);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--chalk);margin:0;font-weight:700;}
+  .sec-h .bar{flex:1;height:1px;background:var(--line);}
+
+  /* recent entries */
+  .entries{display:flex;flex-direction:column;gap:6px;}
+  .entry{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:9px 11px;font-family:var(--mono);font-size:13px;}
+  .entry.rest{border-color:var(--faint);opacity:.72;}
+  .entry .lap{color:var(--amber);font-weight:700;min-width:44px;}
+  .entry.rest .lap{color:var(--muted);}
+  .entry .dur{font-weight:700;min-width:52px;}
+  .entry .who{color:var(--muted);flex:1;}
+  .entry .tag{font-size:11px;color:var(--muted);}
+  .entry .acts{display:flex;gap:4px;}
+  .entry .acts button{border:none;background:var(--surface2);color:var(--muted);border-radius:7px;
+    width:30px;height:30px;font-size:14px;cursor:pointer;padding:0;}
+  .entry .acts button:active{background:var(--surface3);}
+  .empty{color:var(--faint);font-size:13px;text-align:center;padding:16px;font-family:var(--mono);}
+
+  /* charts */
+  .chart-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:12px 12px 8px;margin-bottom:12px;}
+  .chart-card .ct{font-family:var(--mono);font-size:12px;color:var(--chalk);font-weight:700;
+    display:flex;justify-content:space-between;letter-spacing:.5px;}
+  .chart-card .ct em{font-style:normal;color:var(--muted);font-weight:600;}
+  svg.chart{width:100%;height:150px;display:block;margin-top:4px;}
+  .chart text{font-family:var(--mono);}
+
+  /* setup panel */
+  details.setup{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin:10px 0;}
+  details.setup>summary{list-style:none;cursor:pointer;padding:13px 15px;font-family:var(--mono);
+    font-size:13px;font-weight:700;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center;}
+  details.setup>summary::-webkit-details-marker{display:none;}
+  details.setup>summary .chev{color:var(--muted);transition:transform .2s;}
+  details.setup[open]>summary .chev{transform:rotate(180deg);}
+  .setup-body{padding:4px 15px 16px;border-top:1px solid var(--line);}
+  .field{margin:12px 0;}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-family:var(--mono);letter-spacing:.5px;}
+  .field .inrow{display:flex;gap:8px;align-items:center;}
+  input[type=text],input[type=number]{background:var(--surface2);border:1px solid var(--line);
+    color:var(--chalk);border-radius:9px;padding:11px 12px;font-family:var(--mono);font-size:16px;width:100%;}
+  input:focus{outline:none;border-color:var(--amber);}
+  .field .hint{font-size:11px;color:var(--faint);margin-top:5px;font-family:var(--mono);}
+  .unit-tag{font-family:var(--mono);color:var(--muted);font-size:14px;}
+
+  footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);}
+  .foot-btns{display:flex;gap:10px;}
+  .credit{text-align:center;color:var(--faint);font-size:11px;font-family:var(--mono);margin-top:16px;letter-spacing:.5px;}
+  .milestone{position:fixed;left:50%;top:20%;transform:translateX(-50%) scale(.8);opacity:0;
+    background:var(--amber);color:#231603;font-family:var(--mono);font-weight:700;padding:14px 22px;
+    border-radius:12px;font-size:18px;pointer-events:none;transition:all .3s;z-index:50;box-shadow:0 8px 30px rgba(0,0,0,.5);}
+  .milestone.pop{opacity:1;transform:translateX(-50%) scale(1);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>TREY</b> LOGGER <span>· Ty</span></div>
+    <div class="clock"><b id="clkElapsed">0:00</b><span id="clkNow">--:--</span></div>
+  </header>
+
+  <div class="note" id="storeNote">Preview mode — data won't persist across reloads here. Download this file and open it in your phone's browser to save your session.</div>
+
+  <div class="hero">
+    <div class="eyebrow">Harvard Bridge · cumulative</div>
+    <div class="bignum"><span id="cumTy">0</span><span class="u">Ty</span></div>
+    <div class="subline"><b id="cumM">0.0</b> m &nbsp;·&nbsp; <b id="cumFt">0.0</b> ft &nbsp;·&nbsp; <b id="cumSmoot">0.0</b> smoots</div>
+
+    <div class="strip-label"><span>start</span><span id="targetLbl">target 309 Ty</span></div>
+    <div class="strip">
+      <div class="strip-fill" id="stripFill"></div>
+      <div class="strip-ticks" id="stripTicks"></div>
+      <div class="pct" id="stripPct"></div>
+    </div>
+  </div>
+
+  <div class="running" id="running"></div>
+
+  <button class="log-btn start" id="logBtn" onclick="onMainBtn()">START MEASURING<small>heels on the start line, then tap</small></button>
+
+  <div class="row">
+    <button class="btn2" id="breakBtn" onclick="startBreak()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h14a2 2 0 0 1 0 8h-1M4 8v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8M6 3v2M10 3v2M14 3v2"/></svg>
+      Break
+    </button>
+    <button class="btn2 warn" id="undoBtn" onclick="undo()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+      Undo
+    </button>
+  </div>
+
+  <div class="seg-wrap">
+    <div class="seg-title">Lifter / on the chalk</div>
+    <div class="seg" id="lifterSeg"></div>
+  </div>
+
+  <div class="stats">
+    <div class="chip"><div class="k">Last</div><div class="v"><span id="stLast">–</span><small>s</small></div></div>
+    <div class="chip"><div class="k">Avg pace</div><div class="v"><span id="stAvg">–</span><small>s</small></div></div>
+    <div class="chip"><div class="k">Ty / min</div><div class="v"><span id="stRate">–</span></div></div>
+    <div class="chip"><div class="k">Remaining</div><div class="v"><span id="stRem">309</span><small>Ty</small></div></div>
+    <div class="chip"><div class="k">Est. left</div><div class="v"><span id="stEta">–</span></div></div>
+    <div class="chip"><div class="k">Finish ~</div><div class="v" style="font-size:17px"><span id="stFin">–</span></div></div>
+  </div>
+
+  <div class="sec-h"><h2>Live Charts</h2><div class="bar"></div></div>
+
+  <div class="chart-card">
+    <div class="ct"><span>Fatigue curve</span><em id="fatNow"></em></div>
+    <svg class="chart" id="chartFatigue" viewBox="0 0 320 150" preserveAspectRatio="none"></svg>
+  </div>
+  <div class="chart-card">
+    <div class="ct"><span>Cumulative progress</span><em>Ty vs. minutes</em></div>
+    <svg class="chart" id="chartProgress" viewBox="0 0 320 150" preserveAspectRatio="none"></svg>
+  </div>
+  <div class="chart-card">
+    <div class="ct"><span>Pace</span><em>Ty / min, rolling</em></div>
+    <svg class="chart" id="chartPace" viewBox="0 0 320 150" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="sec-h"><h2>Recent Placements</h2><div class="bar"></div></div>
+  <div class="entries" id="entries"><div class="empty">No placements yet. Tap START to begin.</div></div>
+
+  <details class="setup" id="setupPanel">
+    <summary>Setup &amp; calibration <span class="chev">▾</span></summary>
+    <div class="setup-body">
+      <div class="field">
+        <label>Trey's height — defines 1 Ty</label>
+        <div class="inrow">
+          <input type="number" id="hFt" value="6" min="0" step="1" style="flex:1"><span class="unit-tag">ft</span>
+          <input type="number" id="hIn" value="7" min="0" max="11" step="0.5" style="flex:1"><span class="unit-tag">in</span>
+        </div>
+        <div class="hint" id="hHint">1 Ty = 79 in = 2.007 m = 1.179 smoots</div>
+      </div>
+      <div class="field">
+        <label>Target length (Treys)</label>
+        <div class="inrow"><input type="number" id="target" value="309" min="1" step="1"><span class="unit-tag">Ty</span></div>
+        <div class="hint">Predicted span ≈ 309 Ty (364.4 smoots) ± one ear.</div>
+      </div>
+      <div class="field">
+        <label>Crew (comma-separated — becomes the lifter buttons)</label>
+        <input type="text" id="crew" value="Trey, You, A, B" placeholder="names or initials">
+      </div>
+      <button class="btn2" style="width:100%;margin-top:6px" onclick="applySetup()">Apply calibration</button>
+    </div>
+  </details>
+
+  <footer>
+    <div class="foot-btns">
+      <button class="btn2" onclick="exportCSV()">⬇︎ Export CSV</button>
+      <button class="btn2" onclick="copyCSV()" id="copyBtn">⧉ Copy CSV</button>
+      <button class="btn2 warn" onclick="resetAll()">↺ Reset</button>
+    </div>
+    <div class="credit">Ty ≡ 6′7″ · in the Smoot tradition · 6 AM, Jul 18 2026</div>
+  </footer>
+</div>
+
+<div class="milestone" id="milestone"></div>
+
+<script>
+"use strict";
+/* ---------- storage (graceful) ---------- */
+var KEY="trey_logger_v1", mem=null, storageOK=true;
+function saveState(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ storageOK=false; mem=JSON.stringify(S); document.getElementById("storeNote").classList.add("show"); }
+}
+function loadState(){
+  try{ var r=localStorage.getItem(KEY); if(r) return JSON.parse(r); }
+  catch(e){ storageOK=false; document.getElementById("storeNote").classList.add("show");
+    if(mem) return JSON.parse(mem); }
+  return null;
+}
+
+/* ---------- state ---------- */
+var S = loadState() || {
+  heightIn:79, target:309, crew:["Trey","You","A","B"], lifter:"Trey",
+  t0:null, entries:[]   // entry: {lap,t,dur,who,rest,note}
+};
+if(!S.crew||!S.crew.length) S.crew=["Trey","You","A","B"];
+if(S.lifter==null) S.lifter=S.crew[0];
+
+/* ---------- helpers ---------- */
+function treyM(){ return S.heightIn*0.0254; }
+function treyFt(){ return S.heightIn/12; }
+function toSmoot(ty){ return ty*(S.heightIn/67); }
+function fmtClock(ms){ var s=Math.max(0,Math.floor(ms/1000)); var h=Math.floor(s/3600);
+  var m=Math.floor((s%3600)/60); var ss=s%60;
+  return (h>0? h+":"+String(m).padStart(2,"0") : m)+":"+String(ss).padStart(2,"0"); }
+function fmtMin(min){ if(!isFinite(min)||min<=0) return "–"; if(min<60) return Math.round(min)+"m";
+  return Math.floor(min/60)+"h"+String(Math.round(min%60)).padStart(2,"0"); }
+function nowClock(d){ d=d||new Date(); var h=d.getHours(),m=d.getMinutes();
+  var ap=h<12?"AM":"PM"; var hh=h%12; if(hh===0)hh=12;
+  return hh+":"+String(m).padStart(2,"0")+" "+ap; }
+function working(){ return S.entries.filter(function(e){return !e.rest;}); }
+
+/* ---------- main actions ---------- */
+function onMainBtn(){
+  if(S.t0==null){ S.t0=Date.now(); saveState(); render(); return; }
+  logPlacement();
+}
+function logPlacement(){
+  var now=Date.now();
+  var last = S.entries.length? S.entries[S.entries.length-1].t : S.t0;
+  var dur=(now-last)/1000;
+  var lap=S.entries.length+1;
+  S.entries.push({lap:lap,t:now,dur:dur,who:S.lifter,rest:false,note:""});
+  saveState(); render();
+  if(lap % 25===0) milestone(lap+" Ty!");
+  if(lap===Math.round(S.target)) milestone("Full span — "+lap+" Ty!");
+}
+function startBreak(){
+  // marks the NEXT placement's gap as a break (rest), so fatigue stats stay clean
+  if(S.t0==null){ S.t0=Date.now(); }
+  var now=Date.now();
+  var last = S.entries.length? S.entries[S.entries.length-1].t : S.t0;
+  var dur=(now-last)/1000;
+  var lap=S.entries.length+1;
+  // a break is logged as a placement flagged rest (advances nothing meaningful but records time)
+  S.entries.push({lap:lap,t:now,dur:dur,who:S.lifter,rest:true,note:"break"});
+  saveState(); render();
+}
+function undo(){
+  if(!S.entries.length){ if(S.t0!=null){ S.t0=null; saveState(); render(); } return; }
+  S.entries.pop(); saveState(); render();
+}
+function toggleRest(i){ S.entries[i].rest=!S.entries[i].rest; saveState(); render(); }
+function delEntry(i){ S.entries.splice(i,1);
+  // relabel laps sequentially
+  var n=0; S.entries.forEach(function(e){ n++; e.lap=n; }); saveState(); render(); }
+function addNote(i){
+  var cur=S.entries[i].note||"";
+  var v=prompt("Note for placement "+S.entries[i].lap+":", cur);
+  if(v!==null){ S.entries[i].note=v; saveState(); render(); }
+}
+function setLifter(name){ S.lifter=name; saveState(); render(); }
+
+/* ---------- setup ---------- */
+function applySetup(){
+  var ft=parseFloat(document.getElementById("hFt").value)||0;
+  var inch=parseFloat(document.getElementById("hIn").value)||0;
+  S.heightIn=ft*12+inch;
+  S.target=Math.max(1, parseInt(document.getElementById("target").value)||309);
+  var crew=document.getElementById("crew").value.split(",").map(function(s){return s.trim();}).filter(Boolean);
+  S.crew=crew.length?crew:["Trey"];
+  if(S.crew.indexOf(S.lifter)<0) S.lifter=S.crew[0];
+  saveState(); render();
+  document.getElementById("setupPanel").removeAttribute("open");
+}
+function refreshHint(){
+  var ft=parseFloat(document.getElementById("hFt").value)||0;
+  var inch=parseFloat(document.getElementById("hIn").value)||0;
+  var tin=ft*12+inch;
+  document.getElementById("hHint").textContent =
+    "1 Ty = "+tin+" in = "+(tin*0.0254).toFixed(3)+" m = "+(tin/67).toFixed(3)+" smoots";
+}
+
+/* ---------- milestone flash ---------- */
+var msTimer=null;
+function milestone(txt){
+  var el=document.getElementById("milestone"); el.textContent=txt; el.classList.add("pop");
+  clearTimeout(msTimer); msTimer=setTimeout(function(){ el.classList.remove("pop"); },1400);
+}
+
+/* ---------- CSV ---------- */
+function buildCSV(){
+  var rows=[["lap","clock_time","cumulative_Ty","cumulative_m","cumulative_smoots","placement_sec","is_break","lifter","note"]];
+  var count=0;
+  S.entries.forEach(function(e){
+    if(!e.rest) count++;
+    rows.push([ e.lap, nowClock(new Date(e.t)), e.rest?"":count,
+      e.rest?"":(count*treyM()).toFixed(3), e.rest?"":toSmoot(count).toFixed(3),
+      e.dur.toFixed(1), e.rest?"yes":"no", '"'+(e.who||"")+'"', '"'+(e.note||"").replace(/"/g,"'")+'"' ]);
+  });
+  return rows.map(function(r){return r.join(",");}).join("\n");
+}
+function exportCSV(){
+  var csv=buildCSV(); var blob=new Blob([csv],{type:"text/csv"});
+  var url=URL.createObjectURL(blob); var a=document.createElement("a");
+  a.href=url; a.download="trey_measurement_"+new Date().toISOString().slice(0,10)+".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},500);
+}
+function copyCSV(){
+  var csv=buildCSV(); var btn=document.getElementById("copyBtn"); var old=btn.textContent;
+  function done(){ btn.textContent="✓ Copied"; setTimeout(function(){btn.textContent=old;},1200); }
+  try{ navigator.clipboard.writeText(csv).then(done, fallback); }
+  catch(e){ fallback(); }
+  function fallback(){
+    var ta=document.createElement("textarea"); ta.value=csv; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); done(); }catch(_){ btn.textContent="Copy failed"; setTimeout(function(){btn.textContent=old;},1200); }
+    document.body.removeChild(ta);
+  }
+}
+function resetAll(){
+  if(!confirm("Reset the whole session? This clears all placements.")) return;
+  S={heightIn:S.heightIn,target:S.target,crew:S.crew,lifter:S.crew[0],t0:null,entries:[]};
+  saveState(); render();
+}
+
+/* ---------- charts (hand-rolled SVG) ---------- */
+var NS="http://www.w3.org/2000/svg";
+function el(name,attrs){ var e=document.createElementNS(NS,name);
+  for(var k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function drawLine(svgId, pts, opt){
+  var svg=document.getElementById(svgId); while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var W=320,H=150,pl=34,pr=8,pt=10,pb=20;
+  var iw=W-pl-pr, ih=H-pt-pb;
+  if(pts.length<1){
+    svg.appendChild(el("text",{x:W/2,y:H/2,fill:"#5c6675","font-size":11,"text-anchor":"middle"}));
+    svg.lastChild.textContent="waiting for data…"; return;
+  }
+  var xs=pts.map(function(p){return p.x;}), ys=pts.map(function(p){return p.y;});
+  var xmin=Math.min.apply(null,xs), xmax=Math.max.apply(null,xs);
+  var ymin=Math.min.apply(null,ys), ymax=Math.max.apply(null,ys);
+  if(opt.y0!=null) ymin=Math.min(ymin,opt.y0);
+  if(xmax===xmin) xmax=xmin+1;
+  var yr=ymax-ymin; if(yr===0){ymax+=1;yr=1;} ymin-=yr*0.12; ymax+=yr*0.12; yr=ymax-ymin;
+  function X(v){ return pl+(v-xmin)/(xmax-xmin)*iw; }
+  function Y(v){ return pt+ih-(v-ymin)/yr*ih; }
+  // gridlines (3)
+  for(var g=0;g<=2;g++){
+    var yy=pt+ih*g/2; var val=ymax-(ymax-ymin)*g/2;
+    svg.appendChild(el("line",{x1:pl,y1:yy,x2:W-pr,y2:yy,stroke:"#2a333e","stroke-width":1}));
+    var tl=el("text",{x:pl-5,y:yy+3,fill:"#5c6675","font-size":9,"text-anchor":"end"});
+    tl.textContent=(opt.fmtY?opt.fmtY(val):Math.round(val)); svg.appendChild(tl);
+  }
+  // area
+  if(opt.fill){
+    var d="M "+X(pts[0].x)+" "+Y(ymin<0?0:ymin);
+    pts.forEach(function(p){ d+=" L "+X(p.x)+" "+Y(p.y); });
+    d+=" L "+X(pts[pts.length-1].x)+" "+(pt+ih)+" L "+X(pts[0].x)+" "+(pt+ih)+" Z";
+    svg.appendChild(el("path",{d:d,fill:opt.stroke,"fill-opacity":.09}));
+  }
+  // faint raw line
+  if(opt.raw && opt.raw.length>1){
+    var dr="M "+opt.raw.map(function(p){return X(p.x)+" "+Y(p.y);}).join(" L ");
+    svg.appendChild(el("path",{d:dr,fill:"none",stroke:opt.stroke,"stroke-opacity":.22,"stroke-width":1}));
+  }
+  // main line
+  if(pts.length>1){
+    var dm="M "+pts.map(function(p){return X(p.x)+" "+Y(p.y);}).join(" L ");
+    svg.appendChild(el("path",{d:dm,fill:"none",stroke:opt.stroke,"stroke-width":2.2,
+      "stroke-linejoin":"round","stroke-linecap":"round"}));
+  }
+  // rest markers
+  if(opt.rest){ opt.rest.forEach(function(p){
+    svg.appendChild(el("circle",{cx:X(p.x),cy:Y(p.y),r:3,fill:"#8b97a5"})); }); }
+  // last point
+  var lp=pts[pts.length-1];
+  svg.appendChild(el("circle",{cx:X(lp.x),cy:Y(lp.y),r:3.4,fill:opt.stroke,stroke:"#15191f","stroke-width":1.5}));
+  // x end labels
+  var xa=el("text",{x:pl,y:H-6,fill:"#5c6675","font-size":9,"text-anchor":"start"}); xa.textContent=Math.round(xmin);
+  var xb=el("text",{x:W-pr,y:H-6,fill:"#5c6675","font-size":9,"text-anchor":"end"}); xb.textContent=Math.round(xmax);
+  svg.appendChild(xa); svg.appendChild(xb);
+}
+function rollingPace(entries,k){
+  // returns pts {x:lap, y:Ty per min over last k working placements}
+  var w=entries.filter(function(e){return !e.rest;});
+  var out=[];
+  for(var i=0;i<w.length;i++){
+    var lo=Math.max(0,i-k+1); var slice=w.slice(lo,i+1);
+    var secs=slice.reduce(function(a,e){return a+e.dur;},0);
+    var min=secs/60; out.push({x:i+1, y: min>0? slice.length/min : 0});
+  }
+  return out;
+}
+
+/* ---------- render ---------- */
+function render(){
+  var w=working(); var count=w.length; var tgt=S.target;
+  // hero
+  document.getElementById("cumTy").textContent=count;
+  document.getElementById("cumM").textContent=(count*treyM()).toFixed(1);
+  document.getElementById("cumFt").textContent=(count*treyFt()).toFixed(1);
+  document.getElementById("cumSmoot").textContent=toSmoot(count).toFixed(1);
+  document.getElementById("targetLbl").textContent="target "+tgt+" Ty";
+  var pct=Math.min(100, count/tgt*100);
+  document.getElementById("stripFill").style.width=pct+"%";
+  document.getElementById("stripPct").textContent=(pct>=6? Math.round(pct)+"%":"");
+  // ticks every 10% + majors every 50 Ty
+  var tickBox=document.getElementById("stripTicks");
+  if(tickBox.childElementCount===0 || tickBox.dataset.tgt!=tgt){
+    tickBox.innerHTML=""; tickBox.dataset.tgt=tgt;
+    for(var ty=10; ty<tgt; ty+=10){ var i=document.createElement("i");
+      i.style.left=(ty/tgt*100)+"%"; if(ty%50===0)i.className="major"; tickBox.appendChild(i); }
+  }
+  // main button
+  var btn=document.getElementById("logBtn");
+  if(S.t0==null){ btn.className="log-btn start"; btn.innerHTML="START MEASURING<small>heels on the start line, then tap</small>"; }
+  else if(count>=tgt){ btn.className="log-btn"; btn.innerHTML="LOG PLACEMENT<small>past target — keep going or finish</small>"; }
+  else { btn.className="log-btn"; btn.innerHTML="LOG PLACEMENT<small>Ty "+(count+1)+" &nbsp;·&nbsp; tap at head mark</small>"; }
+
+  // lifter segmented control
+  var seg=document.getElementById("lifterSeg"); seg.innerHTML="";
+  S.crew.forEach(function(name){
+    var b=document.createElement("button"); b.textContent=name;
+    if(name===S.lifter) b.className="active";
+    b.onclick=function(){ setLifter(name); }; seg.appendChild(b);
+  });
+
+  // stats
+  var durs=w.map(function(e){return e.dur;});
+  var last = S.entries.length? S.entries[S.entries.length-1] : null;
+  document.getElementById("stLast").textContent = last? last.dur.toFixed(0) : "–";
+  var avg = durs.length? durs.reduce(function(a,b){return a+b;},0)/durs.length : null;
+  document.getElementById("stAvg").textContent = avg? avg.toFixed(0) : "–";
+  // recent pace: last up-to-10 working
+  var recent=w.slice(-10); var rsec=recent.reduce(function(a,e){return a+e.dur;},0);
+  var rate = rsec>0? (recent.length/(rsec/60)) : null;
+  document.getElementById("stRate").textContent = rate? rate.toFixed(1) : "–";
+  var rem=Math.max(0,tgt-count); document.getElementById("stRem").textContent=rem;
+  var etaMin = (rate&&rate>0)? rem/rate : NaN;
+  document.getElementById("stEta").textContent=fmtMin(etaMin);
+  document.getElementById("stFin").textContent = (isFinite(etaMin))? nowClock(new Date(Date.now()+etaMin*60000)) : "–";
+
+  // entries (most recent first, cap 6)
+  var box=document.getElementById("entries");
+  if(!S.entries.length){ box.innerHTML='<div class="empty">'+(S.t0==null?"No placements yet. Tap START to begin.":"Session started. Tap LOG PLACEMENT.")+'</div>'; }
+  else{
+    box.innerHTML="";
+    var slice=S.entries.slice(-6).reverse();
+    slice.forEach(function(e){
+      var idx=S.entries.indexOf(e);
+      var row=document.createElement("div"); row.className="entry"+(e.rest?" rest":"");
+      row.innerHTML =
+        '<span class="lap">'+(e.rest?"☕":"#"+e.lap)+'</span>'+
+        '<span class="dur">'+e.dur.toFixed(0)+'s</span>'+
+        '<span class="who">'+(e.who||"")+(e.note?' · <span class="tag">'+e.note+'</span>':'')+'</span>'+
+        '<span class="acts"></span>';
+      var acts=row.querySelector(".acts");
+      var bR=document.createElement("button"); bR.textContent=e.rest?"↺":"☕"; bR.title="toggle break";
+      bR.onclick=function(){toggleRest(idx);}; acts.appendChild(bR);
+      var bN=document.createElement("button"); bN.textContent="✎"; bN.title="note";
+      bN.onclick=function(){addNote(idx);}; acts.appendChild(bN);
+      var bD=document.createElement("button"); bD.textContent="⌫"; bD.title="delete";
+      bD.onclick=function(){delEntry(idx);}; acts.appendChild(bD);
+      box.appendChild(row);
+    });
+  }
+
+  // charts
+  var fatPts=w.map(function(e,i){return {x:i+1,y:e.dur};});
+  var restPts=[]; var ci=0;
+  S.entries.forEach(function(e){ if(!e.rest){ci++;} });
+  // rest points plotted at their neighboring working index is complex; skip on fatigue for clarity
+  drawLine("chartFatigue", fatPts, {stroke:"#ffa62b", fill:true,
+    fmtY:function(v){return Math.round(v)+"s";}});
+  document.getElementById("fatNow").textContent = fatPts.length? "now "+fatPts[fatPts.length-1].y.toFixed(0)+"s" : "";
+
+  var progPts=[]; var cc=0; var t0=S.t0||Date.now();
+  S.entries.forEach(function(e){ if(!e.rest){ cc++; progPts.push({x:(e.t-t0)/60000, y:cc}); } });
+  drawLine("chartProgress", progPts, {stroke:"#4ecdc4", fill:true, y0:0,
+    fmtY:function(v){return Math.round(v);}});
+
+  drawLine("chartPace", rollingPace(S.entries,8), {stroke:"#5fd08a",
+    fmtY:function(v){return v.toFixed(1);}});
+
+  // setup fields reflect state
+  document.getElementById("target").value=S.target;
+}
+
+/* ---------- live clocks ---------- */
+setInterval(function(){
+  document.getElementById("clkNow").textContent=nowClock();
+  if(S.t0!=null){
+    document.getElementById("clkElapsed").textContent=fmtClock(Date.now()-S.t0);
+    var last=S.entries.length?S.entries[S.entries.length-1].t:S.t0;
+    var run=(Date.now()-last)/1000;
+    document.getElementById("running").innerHTML="current placement <b>"+run.toFixed(0)+"s</b>";
+  } else {
+    document.getElementById("clkElapsed").textContent="0:00";
+    document.getElementById("running").innerHTML="";
+  }
+},1000);
+
+document.getElementById("hFt").addEventListener("input",refreshHint);
+document.getElementById("hIn").addEventListener("input",refreshHint);
+
+/* init inputs from state */
+(function(){
+  document.getElementById("hFt").value=Math.floor(S.heightIn/12);
+  document.getElementById("hIn").value=+(S.heightIn-Math.floor(S.heightIn/12)*12).toFixed(1);
+  document.getElementById("target").value=S.target;
+  document.getElementById("crew").value=S.crew.join(", ");
+  refreshHint();
+})();
+render();
+</script>
+</body>
+</html>
